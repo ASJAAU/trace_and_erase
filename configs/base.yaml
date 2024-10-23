@@ -3,7 +3,7 @@ base: ""
 training:
   epochs: 10
   lr: 0.01
-  batch_size: 50
+  batch_size: 8
   log_freq: 500 #Number of batches
   loss: "mse"
 
@@ -23,7 +23,11 @@ evaluation:
 
 model:
   arch: "resnet50d"
+  in_channels: 3
   weights: null
+  finale_activation: null
+  intermediate_outputs: 
+    - "model.layer4[2].act3"
 
 data:
   classes:
@@ -31,10 +35,13 @@ data:
   - "bicycle"
   - "motorcycle"
   - "vehicle"
-  root: "data/example_data/"
-  train: "data/example_data/annotations.csv"
-  valid: "data/example_data/annotations.csv"
-  test: "data/example_data/annotations.csv"
+  binary_cls: False
+  classwise: False
+  root: "/Data/Harborfront_raw/"
+  train: "data/Train_data.csv"
+  valid: "data/Valid_data.csv"
+  test: "data/Test_data.csv"
+  
 
 wandb:
   enabled: False
