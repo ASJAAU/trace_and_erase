@@ -38,13 +38,10 @@ def get_valid_files(inputs):
 def get_config(path, verbose=False):
     with open (path, 'r') as f:
         cfg = yaml.safe_load(f,)
-        #If there is a base config
+        #If there is a base config: load and update 
         if os.path.isfile(cfg["base"]):
-            print(f"### LOADING BASE CONFIG PARAMETERS ({cfg['base']}) ####")
             with open (cfg["base"], 'r') as g:
                 cfg = update_config(yaml.safe_load(g), cfg)
-        else:
-            print(f"NO CONFIG BASE DETECTED: Loading '{path}' as is")
 
     if verbose:
         print(yaml.dump(cfg))
