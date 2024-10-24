@@ -7,7 +7,8 @@ import torch
 
 from utils.metrics import Logger
 from utils.misc import existsfolder, get_config
-from utils.data import get_dataset, get_dataloader, get_transforms
+from utils.data import HarborfrontDataset, get_transforms
+from torch.utils.data import DataLoader
 from model import get_model
 
 if __name__ == "__main__":
@@ -21,7 +22,7 @@ if __name__ == "__main__":
     parser.add_argument("--verbose", default=False, action='store_true', help="Enable verbose status printing")
     args = parser.parse_args()        
 
-    print("\n########## COUNT-EXPLAIN-REMOVE ##########")
+    print("\n########## TRACE AND ERASE ##########")
     #Load configs
     cfg = get_config(args.config)
 
@@ -32,29 +33,62 @@ if __name__ == "__main__":
     valid_transforms = get_transforms("valid", cfg["augmentation"])
 
     print("\n### CREATING TRAINING DATASET")
+    train_dataset = HarborfrontDataset(
+        data_split=cfg["data"]["train"], 
+        root=cfg["data"]["root"], 
+        transform=train_transforms, 
+        target_transform=label_transforms, 
+        classes=cfg["data"]["classes"], 
+        binary_labels=cfg["data"]["binary_cls"],
+        classwise=cfg["data"]["classwise"], 
+        device="cpu", 
+        verbose=True)
+    
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=cfg["training"]["batch_size"],
+    )
 
-    # TODO make dataloader
-    train_dataloader = get_dataloader(cfg, get_dataset(cfg, "train", train_transforms, label_transforms))
-    valid_dataloader = get_dataloader(cfg, get_dataset(cfg, "valid", valid_transforms, label_transforms))
+    print("\n### CREATING VALIDATION DATASET")
+    valid_dataset = HarborfrontDataset(
+        data_split=cfg["data"]["valid"], 
+        root=cfg["data"]["root"], 
+        transform=train_transforms, 
+        target_transform=label_transforms, 
+        classes=cfg["data"]["classes"], 
+        binary_labels=cfg["data"]["binary_cls"],
+        classwise=cfg["data"]["classwise"], 
+        device="cpu", 
+        verbose=True)
+    
+    valid_dataloader = DataLoader(
+        valid_dataset,
+        batch_size=cfg["training"]["batch_size"],
+    )
 
-    #print example batch (sanity check)
+    print("\n### DATALOADER SANITY CHECK")
     dummy_sample = next(iter(train_dataloader))
-    print(f"Input Tensor = {dummy_sample[0].shape}")
-    print(f"Label Tensor = {dummy_sample[1].shape}")
+    print(f"Train: Input Tensor = {dummy_sample[0].shape}")
+    print(f"Train: Label Tensor = {dummy_sample[1].shape}")
+    dummy_sample = next(iter(valid_dataloader))
+    print(f"Valid: Input Tensor = {dummy_sample[0].shape}")
+    print(f"Valid: Label Tensor = {dummy_sample[1].shape}")
 
     print("\n########## BUILDING MODEL ##########")
-    # TODO instansiate model
+    print(f"MODEL ARCH: {cfg['model']['arch']}")
     model = get_model(cfg, args.device)
 
     #Define optimizer
+    print(f"OPTIMIZER: torch.optim.SGD")
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=cfg["training"]["lr"],
-        momentum=0.9,
+        momentum=cfg["training"]["momentum"],
         weight_decay=5e-4
         )
 
     #Define loss
+    print(f"LOSS: {cfg['training']['loss']}")
     if cfg["training"]["loss"] == "huber":
         loss_fn = torch.nn.HuberLoss(delta=2.0)
     elif cfg["training"]["loss"] == "l1":
@@ -64,6 +98,8 @@ if __name__ == "__main__":
     else:
         raise Exception(f"UNKNOWN LOSS: '{cfg['training']['loss']}' must be one of the following: 'l1', 'mse', 'huber' ")
 
+
+    print("\n########## LOCAL OUTPUTS ##########")
     #Create output folder
     out_folder = f'{args.output}/{datetime.now().strftime("%Y_%m_%d_%H-%M-%S")}/'
     print(f"Saving weights and logs at '{out_folder}'")
@@ -77,8 +113,8 @@ if __name__ == "__main__":
     
     #Logging
     if cfg["evaluation"]["classwise_metrics"]:
-        train_logger = Logger(cfg, out_folder=out_folder, metrics=cfg["evaluation"]["metrics"], classwise_metrics=cfg["data"]["classes"])
-        valid_logger = Logger(cfg, out_folder=out_folder, metrics=cfg["evaluation"]["metrics"], classwise_metrics=cfg["data"]["classes"])
+        train_logger = Logger(cfg, out_folder=out_folder, metrics=cfg["evaluation"]["metrics"], classwise_metrics=train_dataset.classes)
+        valid_logger = Logger(cfg, out_folder=out_folder, metrics=cfg["evaluation"]["metrics"], classwise_metrics=train_dataset.classes)
     else:
         train_logger = Logger(cfg, out_folder=out_folder, metrics=cfg["evaluation"]["metrics"])
         valid_logger = Logger(cfg, out_folder=out_folder, metrics=cfg["evaluation"]["metrics"])
@@ -94,12 +130,18 @@ if __name__ == "__main__":
                 extra_plots[f"conf_plot_{c}"] = partial(conf_matrix_plot, idx=i)
 
     print("\n########## TRAINING MODEL ##########")
+    print(f"Logging progress every: {cfg['training']['log_freq']} batches ({cfg['training']['log_freq']*cfg['training']['batch_size']} samples)")
+    print(f"Running evaluation every: {cfg['evaluation']['eval_freq']} batches ({cfg['evaluation']['eval_freq']*cfg['training']['batch_size']} samples)")
+    best_model=10000 #We want the loss to be lower than this before we save anything
+    itteration = 0
     for epoch in tqdm.tqdm(range(cfg["training"]["epochs"]), unit="Epoch", desc="Epochs"):
         #Train
         model.train()
         running_loss = 0
         for i, batch in tqdm.tqdm(enumerate(train_dataloader), unit="Batch", desc="Training", leave=False, total=len(train_dataloader)):
-
+            #Count batches for eval checkpoints
+            itteration += 1
+            
             #Reset gradients (redundant but sanity check)
             optimizer.zero_grad()
             
@@ -112,7 +154,7 @@ if __name__ == "__main__":
             #Calculate loss
             loss = loss_fn(outputs, labels)
             loss.backward()
-            running_loss += loss.item()
+            running_loss += loss.item() / batch.shape[0]
 
             #Propogate error
             optimizer.step()
@@ -126,7 +168,7 @@ if __name__ == "__main__":
                     clear_buffer=True,
                     prepend='train',
                     xargs={
-                        "loss": running_loss/len(train_dataloader)
+                        "loss": running_loss/cfg["training"]["log_freq"]
                     },
                 )
                 running_loss = 0
@@ -134,6 +176,7 @@ if __name__ == "__main__":
             #Log validation stats
             if i % cfg["evaluation"]["eval_freq"] == 0 or i >= len(train_dataloader)-1:
                 #Proceed to Validation
+                model.eval()
                 with torch.no_grad():
                     valid_loss = 0
                     valid_logger.clear_buffer()
@@ -145,22 +188,30 @@ if __name__ == "__main__":
                         outputs = model(val_inputs)
 
                         #Calculate loss
-                        val_loss += loss_fn(outputs, val_labels).item()
+                        val_loss += loss_fn(outputs, val_labels).item() / val_batch.shape[0]
 
                         #Store prediction
                         valid_logger.add_prediction(outputs.detach().to("cpu").numpy(), val_labels.detach().to("cpu").numpy())
 
                     #Log validation metrics
+                    validation_loss = val_loss / len(valid_dataloader)
                     val_logs = valid_logger.log(
                         clear_buffer=True,
                         prepend='valid',
                         extras=extra_plots,
                         xargs={
-                            "loss": val_loss / len(valid_dataloader)
+                            "loss": validation_loss,
+                            "itteration": itteration,
                         },
                     )
                     val_loss = 0
+                    print(f"Validation after {itteration}")
                     print(val_logs)
-        
+                    
+                    #Save best model
+                    if validation_loss < best_model:
+                        torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-itt-{itteration}-loss{validation_loss}.pt')
+
+                model.train()
         #Save Model
-        torch.save(model.state_dict(), out_folder + "/weights/" + f'{cfg["model"]["arch"]}-{cfg["model"]["task"]}-f{cfg["model"]["arch"]}-E{epoch}.pt')
+        torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-epoch-{epoch}.pt')
