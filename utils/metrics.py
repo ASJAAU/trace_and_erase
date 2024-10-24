@@ -1,4 +1,5 @@
 import numpy as np
+from functools import partial
 
 ### LOGGING
 class Logger:
@@ -92,7 +93,27 @@ def wandb_logger(cfg, output_path="./wandb"):
 ### HELPER FUNCTIONS FOR LOGGING
 def get_metric(metric, classwise=[]):
     metrics = {}
-    raise NotImplemented
+    if metric == "mae":
+        metrics["MAE"] = mae
+        for i,c in enumerate(classwise):
+            metrics[f"MAE_{c}"] = partial(mae, idx=i)
+    #RMSE
+    elif metric == "rmse":
+        metrics["RMSE"] = rmse
+        for i,c in enumerate(classwise):
+            metrics[f"RMSE_{c}"] = partial(rmse, idx=i)
+    #MAPE
+    elif metric == "mape":
+        metrics["MAPE"] = mape
+        for i,c in enumerate(classwise):
+            metrics[f"MAPE_{c}"] = partial(mape, idx=i)
+    #MASE    
+    elif metric == "maSe":
+        metrics["MASE"] = mase
+        for i,c in enumerate(classwise):
+            metrics[f"MASE_{c}"] = partial(mase, idx=i)
+    else:
+        print(f"UNRECOGNIZED METRIC: {metric}, IGNORED")
     return metrics
     
 def get_wandb_plots(names):
@@ -101,3 +122,34 @@ def get_wandb_plots(names):
     for name in names:
         plots[name] = getattr(wandplots)
     return plots
+
+#Metrics functions
+def mae(preds, labels, idx=None):
+    if idx is None: #Calculating total MAE
+        return np.mean(abs(preds-labels))
+    else: #Calculating class specific MAE
+        return np.mean(abs(preds[:,idx]-labels[:,idx]))
+    
+def mape(preds, labels, idx=None):
+    if idx is None: #Calculating total MAPE
+        return np.mean((abs(preds-labels)/labels)*100)
+    else: #Calculating class specific MAPE
+        return np.mean((abs(preds[:,idx]-labels[:,idx])/labels)*100)
+    
+def mase(preds, labels, idx=None):
+    if idx is None: #Calculating total MASE
+        return np.mean(abs(preds-labels)) / np.mean(abs(labels-np.tile(np.mean(labels, axis=0),(labels.shape[0],1))))
+    else: #Calculating class specific MASE
+        return np.mean(abs(preds[:,idx]-labels[:,idx])) / np.mean(abs(labels[:,idx]-np.tile(np.mean(labels[:,idx], axis=0),(labels.shape[0],1))))
+
+def rmse(preds, labels, idx=None):
+    if idx is None: #Calculating total RMSE
+        return np.sqrt(np.mean(abs(preds-labels)**2))
+    else: #Calculating class specific RMSE
+        return np.sqrt(np.mean(abs(preds[:,idx]-labels[:,idx])**2))
+
+def r2(preds, labels, idx=None):
+    return None
+
+def HmCvr(heatmap, mask):
+    return np.sum(np.multiply(heatmap,mask)) / np.sum(heatmap)
