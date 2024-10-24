@@ -84,13 +84,14 @@ class HarborfrontDataset(Dataset):
         
 
         #Grab labels
-        self.dataset["labels"] = self.dataset.apply(lambda x: np.asarray([int(len(x[g])) for g in self.classes], dtype=np.int8), axis=1)
+        self.dataset["labels"] = self.dataset.apply(lambda x: np.asarray([int(x[g]) for g in self.classes], dtype=np.int8), axis=1)
 
         #Format labels
         if binary_labels:
-            self.self.dataset["labels"] = self.dataset.apply(lambda x: np.asarray([1 if g>=1 else 0 for g in x["labels"]], dtype=np.int8), axis=1)
+            self.dataset["labels"] = self.dataset.apply(lambda x: np.asarray([1 if g>=1 else 0 for g in x["labels"]], dtype=np.int8), axis=1)
         if not classwise:
-            self.self.dataset["labels"] = self.dataset.apply(lambda x: np.sum(x["labels"], dtype=np.int8), axis=1)
+            self.dataset["labels"] = self.dataset.apply(lambda x: [np.sum(x["labels"], dtype=np.int8)], axis=1)
+        
         if verbose:
             print(f'Successfully loaded "{data_split}" as {self.__repr__()}')
             print("")
@@ -100,7 +101,7 @@ class HarborfrontDataset(Dataset):
 
     def __getitem__(self, idx):
         image = read_image(self.images.iloc[idx])
-        label = torch.Tensor(self.labels.iloc[idx])
+        label = torch.Tensor(self.dataset["labels"].iloc[idx])
 
         if self.transform:
             image = self.transform(image)
@@ -120,7 +121,7 @@ class HarborfrontDataset(Dataset):
 if __name__ == '__main__':
     from misc import get_config
     cfg = get_config("configs/base.yaml")
-    subset = "train"
+    subset = "test"
 
     #Set transforms
     transforms = get_transforms(subset)
@@ -141,7 +142,7 @@ if __name__ == '__main__':
     #Load dataloader
     dataloader = DataLoader(
         dataset,
-        batch_size=cfg["training"]["batch_size"]
+        batch_size=cfg["training"]["batch_size"],
     )
 
     #Print dummy sample
