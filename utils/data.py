@@ -1,5 +1,5 @@
 from torchvision.transforms import v2 as torch_transforms
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 from torchvision.io import read_image
 import torch
 import pandas as pd
@@ -12,23 +12,26 @@ def get_transforms(type='train', augments={}):
     transform_dict={
         "RandomHorizontalFlip": torch_transforms.RandomHorizontalFlip
     }
-
-    #Define base transforms
-    transforms = [
-        torch_transforms.ToDtype(torch.float32, scale=True),
-        torch_transforms.ToTensor(),
-    ]
-
-    #Return label transforms
+    #Potential label formatting (for throughput optimization)
     if type == "label":
-        return torch_transforms.Compose([torch_transforms.ToTensor()])
-    
+        return torch_transforms.Compose([
+            torch_transforms.ToTensor()
+        ])
+    #Input transforms for training
     elif type == "train":
+        transforms = [
+            torch_transforms.ToDtype(torch.float32, scale=True),
+            torch_transforms.ToTensor(),
+            ]
         for aug in augments.keys():
-            transforms.extend(transform_dict(aug)(**augments[aug]))
+            transforms.append(transform_dict[aug](**augments[aug][0]))
         return torch_transforms.Compose(transforms)
-    
+    #Input transforms for evaluation
     elif type == "test" or type == "valid":
+        transforms = [
+            torch_transforms.ToDtype(torch.float32, scale=True),
+            torch_transforms.ToTensor(),
+            ]
         return torch_transforms.Compose(transforms)
 
 
@@ -120,6 +123,7 @@ class HarborfrontDataset(Dataset):
 
 if __name__ == '__main__':
     from misc import get_config
+    from torch.utils.data import DataLoader
     cfg = get_config("configs/base.yaml")
     subset = "test"
 
