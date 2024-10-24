@@ -1,5 +1,6 @@
 import timm
 import torch
+import functools
 
 
 def get_model(cfg, device):
@@ -18,15 +19,17 @@ def get_model(cfg, device):
         except:
             raise Exception(f"Failed to load weights from '{cfg['model']['weights']}'")
     
+    #Apply hooks for extracting intermediate representations
     if cfg["model"]["intermediate_outputs"] is not None:
-        model.intermediate_outputs={}  
+        model.intermediate_outputs={}
+        def hook(module,input,output,name="no_name"):
+            model.intermediate_outputs[name] = output.detach()
+            return output  
         print("Exposing intermediate representations")
         for layer_name in cfg['model']['intermediate_outputs']:
             layer = eval(layer_name)
-            def hook(module,input,output):
-                model.intermediate_outputs[layer] = output.detach()
-            layer.register_forward_hook(hook)
-            print(f"Hook for '{layer}', registered")
+            layer.register_forward_hook(functools.partial(hook, name=layer_name))
+            print(f"Hook for '{layer_name}', registered")
     return model
 
 if __name__ == '__main__':
@@ -38,10 +41,14 @@ if __name__ == '__main__':
     dummy_batch_size=4
     dummy_data = torch.rand(dummy_batch_size,cfg["model"]["in_channels"],224,224)
 
+    #print("Model:")
+    #print(model)
+
     print(f"Input: {dummy_data.shape}")
     outputs = model(dummy_data)
     print(f"Output:\n", outputs.detach().shape)
     if cfg["model"]["intermediate_outputs"] is not None:
         print(f"Intermediates:\n")
-        for intermediate in model.intermediate_outputs:
-            print(model.intermediate_outputs[intermediate].shape)
+        print(model.intermediate_outputs.keys())
+        for name in model.intermediate_outputs.keys():
+            print(f"{name}: {model.intermediate_outputs[name].shape}")
