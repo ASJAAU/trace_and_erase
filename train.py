@@ -11,6 +11,38 @@ from utils.data import HarborfrontDataset, get_transforms
 from torch.utils.data import DataLoader
 from model import get_model
 
+
+def validate(model, valid_dataloader, valid_logger):
+    model.eval()
+    with torch.no_grad():
+        valid_loss = 0
+        valid_logger.clear_buffer()
+        for j, val_batch in tqdm.tqdm(enumerate(valid_dataloader), unit="Batch", desc="Validating", leave=False, total=len(valid_dataloader)):
+            #Seperate batch
+            val_inputs, val_labels = val_batch
+            
+            #Forward
+            outputs = model(val_inputs)
+
+            #Calculate loss
+            valid_loss += loss_fn(outputs, val_labels).item()
+
+            #Store prediction
+            valid_logger.add_prediction(outputs.detach().to("cpu").numpy(), val_labels.detach().to("cpu").numpy())
+
+        #Log validation metrics
+        validation_loss = valid_loss / len(valid_dataloader)
+        val_logs = valid_logger.log(
+            clear_buffer=True,
+            prepend='valid',
+            extras=extra_plots,
+            xargs={
+                "loss": validation_loss,
+                "itteration": itteration,
+            },
+        )
+        return val_logs, validation_loss
+
 if __name__ == "__main__":
     #CLI
     parser = argparse.ArgumentParser("Train XAI-MU model")
@@ -50,6 +82,12 @@ if __name__ == "__main__":
         batch_size=cfg["training"]["batch_size"],
     )
 
+    if args.verbose:
+        print("Train data sanity check")
+        dummy_sample = next(iter(train_dataloader))
+        print(f"Train: Input Tensor = {dummy_sample[0].shape}")
+        print(f"Train: Label Tensor = {dummy_sample[1].shape}\n{dummy_sample[1]}")
+
     print("\n### CREATING VALIDATION DATASET")
     valid_dataset = HarborfrontDataset(
         data_split=cfg["data"]["valid"], 
@@ -68,20 +106,17 @@ if __name__ == "__main__":
         batch_size=cfg["training"]["batch_size"],
     )
 
-    print("\n### DATALOADER SANITY CHECK")
-    dummy_sample = next(iter(train_dataloader))
-    print(f"Train: Input Tensor = {dummy_sample[0].shape}")
-    print(f"Train: Label Tensor = {dummy_sample[1].shape}")
-    dummy_sample = next(iter(valid_dataloader))
-    print(f"Valid: Input Tensor = {dummy_sample[0].shape}")
-    print(f"Valid: Label Tensor = {dummy_sample[1].shape}")
+    if args.verbose:
+        print("Validation data sanity check")
+        dummy_sample = next(iter(valid_dataloader))
+        print(f"Valid: Input Tensor = {dummy_sample[0].shape}")
+        print(f"Valid: Label Tensor = {dummy_sample[1].shape}\n{dummy_sample[1]}")
 
     print("\n########## BUILDING MODEL ##########")
     print(f"MODEL ARCH: {cfg['model']['arch']}")
     model = get_model(cfg, args.device)
 
     #Define optimizer
-    print(f"OPTIMIZER: torch.optim.SGD")
     optimizer = torch.optim.SGD(
         model.parameters(),
         lr=cfg["training"]["lr"],
@@ -134,13 +169,15 @@ if __name__ == "__main__":
     print("\n########## TRAINING MODEL ##########")
     print(f"Logging progress every: {cfg['training']['log_freq']} batches ({cfg['training']['log_freq']*cfg['training']['batch_size']} samples)")
     print(f"Running evaluation every: {cfg['evaluation']['eval_freq']} batches ({cfg['evaluation']['eval_freq']*cfg['training']['batch_size']} samples)")
+    
     best_model=10000 #We want the loss to be lower than this before we save anything
     itteration = 0
+    
+    #Train
     for epoch in tqdm.tqdm(range(cfg["training"]["epochs"]), unit="Epoch", desc="Epochs"):
-        #Train
         model.train()
         running_loss = 0
-        for i, batch in tqdm.tqdm(enumerate(train_dataloader), unit="Batch", desc="Training", leave=False, total=len(train_dataloader)):
+        for batch in tqdm.tqdm(train_dataloader, unit="Batch", desc="Training", leave=False, total=len(train_dataloader)):
             #Count batches for eval checkpoints
             itteration += 1
             
@@ -165,55 +202,24 @@ if __name__ == "__main__":
             train_logger.add_prediction(outputs.detach().to("cpu").numpy(), labels.detach().to("cpu").numpy())
 
             #Log training stats
-            if i % cfg["training"]["log_freq"] == 0:
+            if itteration % cfg["training"]["log_freq"] == 0:
                 logs = train_logger.log(
                     clear_buffer=True,
                     prepend='train',
                     xargs={
-                        "loss": running_loss/cfg["training"]["log_freq"]
+                        "loss": running_loss/cfg["training"]["log_freq"],
+                        "running_loss": running_loss,
                     },
                 )
                 running_loss = 0
 
             #Log validation stats
-            if i % cfg["evaluation"]["eval_freq"] == 0 or i >= len(train_dataloader)-1:
-                #Proceed to Validation
-                model.eval()
-                with torch.no_grad():
-                    valid_loss = 0
-                    valid_logger.clear_buffer()
-                    for j, val_batch in tqdm.tqdm(enumerate(valid_dataloader), unit="Batch", desc="Validating", leave=False, total=len(valid_dataloader)):
-                        #Seperate batch
-                        val_inputs, val_labels = val_batch
-                        
-                        #Forward
-                        outputs = model(val_inputs)
-
-                        #Calculate loss
-                        valid_loss += loss_fn(outputs, val_labels).item()
-
-                        #Store prediction
-                        valid_logger.add_prediction(outputs.detach().to("cpu").numpy(), val_labels.detach().to("cpu").numpy())
-
-                    #Log validation metrics
-                    validation_loss = valid_loss / len(valid_dataloader)
-                    val_logs = valid_logger.log(
-                        clear_buffer=True,
-                        prepend='valid',
-                        extras=extra_plots,
-                        xargs={
-                            "loss": validation_loss,
-                            "itteration": itteration,
-                        },
-                    )
-                    val_loss = 0
-                    print(f"Validation after {itteration}")
-                    print(val_logs)
-                    
-                    #Save best model
-                    if validation_loss < best_model:
-                        torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-itt-{itteration}-loss{validation_loss}.pt')
-
+            if itteration % cfg["evaluation"]["eval_freq"] == 0 or i >= len(train_dataloader):
+                log, validation_loss = validate(model, valid_dataloader, valid_logger)
+                if validation_loss < best_model:
+                    best_model = validation_loss
+                    torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-itt-{itteration}-loss{validation_loss}.pt')
                 model.train()
-        #Save Model
+
+       #Save Model
         torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-epoch-{epoch}.pt')
