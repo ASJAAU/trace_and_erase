@@ -37,11 +37,12 @@ if __name__ == "__main__":
         data_split=cfg["data"]["train"], 
         root=cfg["data"]["root"], 
         transform=train_transforms, 
-        target_transform=label_transforms, 
+        target_transform=label_transforms,
+        in_channels=cfg["model"]["in_channels"], 
         classes=cfg["data"]["classes"], 
         binary_labels=cfg["data"]["binary_cls"],
-        classwise=cfg["data"]["classwise"], 
-        device="cpu", 
+        classwise=cfg["evaluation"]["classwise_metrics"], 
+        device=args.device, 
         verbose=True)
     
     train_dataloader = DataLoader(
@@ -54,11 +55,12 @@ if __name__ == "__main__":
         data_split=cfg["data"]["valid"], 
         root=cfg["data"]["root"], 
         transform=train_transforms, 
-        target_transform=label_transforms, 
+        target_transform=label_transforms,
+        in_channels=cfg["model"]["in_channels"], 
         classes=cfg["data"]["classes"], 
         binary_labels=cfg["data"]["binary_cls"],
-        classwise=cfg["data"]["classwise"], 
-        device="cpu", 
+        classwise=cfg["evaluation"]["classwise_metrics"], 
+        device=args.device, 
         verbose=True)
     
     valid_dataloader = DataLoader(
@@ -120,8 +122,8 @@ if __name__ == "__main__":
         valid_logger = Logger(cfg, out_folder=out_folder, metrics=cfg["evaluation"]["metrics"])
 
     #Plotting for Validation
-    if cfg["wandb"]["plotting"]:
-        extra_plots = {}
+    extra_plots = {}
+    if cfg["wandb"]["enabled"] and cfg["wandb"]["plotting"]:
         from utils.wandb_plots import conf_matrix_plot
         from functools import partial
         extra_plots[f"conf_plot"] = conf_matrix_plot
@@ -149,12 +151,12 @@ if __name__ == "__main__":
             inputs, labels = batch
             
             #Forward
-            outputs = model(inputs)
+            outputs = model(inputs.to(args.device))
             
             #Calculate loss
             loss = loss_fn(outputs, labels)
             loss.backward()
-            running_loss += loss.item() / batch.shape[0]
+            running_loss += loss.item()
 
             #Propogate error
             optimizer.step()
@@ -188,13 +190,13 @@ if __name__ == "__main__":
                         outputs = model(val_inputs)
 
                         #Calculate loss
-                        val_loss += loss_fn(outputs, val_labels).item() / val_batch.shape[0]
+                        valid_loss += loss_fn(outputs, val_labels).item()
 
                         #Store prediction
                         valid_logger.add_prediction(outputs.detach().to("cpu").numpy(), val_labels.detach().to("cpu").numpy())
 
                     #Log validation metrics
-                    validation_loss = val_loss / len(valid_dataloader)
+                    validation_loss = valid_loss / len(valid_dataloader)
                     val_logs = valid_logger.log(
                         clear_buffer=True,
                         prepend='valid',

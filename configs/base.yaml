@@ -2,10 +2,11 @@ base: ""
 
 training:
   epochs: 10
-  lr: 0.01
   batch_size: 8
   log_freq: 500 #Number of batches
   loss: "mse"
+  lr: 0.01
+  momentum: 0.9
 
 augmentation:
   RandomHorizontalFlip:
@@ -26,7 +27,10 @@ model:
   in_channels: 3
   weights: null
   finale_activation: null
-  intermediate_outputs: 
+  intermediate_outputs: #print(model) to find layer names
+    - "model.layer1[2].act3"
+    - "model.layer2[2].act3" 
+    - "model.layer3[2].act2"
     - "model.layer4[2].act3"
 
 data:
@@ -35,20 +39,18 @@ data:
   - "bicycle"
   - "motorcycle"
   - "vehicle"
-  binary_cls: False
-  classwise: False
+  binary_cls: True
   root: "/Data/Harborfront_raw/"
-  train: "data/Train_data.csv"
+  train: "data/Test_data_reduced.csv" #"data/Train_data.csv"
   valid: "data/Valid_data.csv"
-  test: "data/Test_data.csv"
+  test: "data/Test_data_reduced.csv" #"data/Test_data.csv"
   
-
 wandb:
-  enabled: False
+  enabled: True
   plotting: True
   resume: null
   project_name: "Trace and Erase"
-  entity: "user"
+  entity: "repai"
   notes: ""
   tags:
     - Baseline
