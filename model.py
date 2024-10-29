@@ -34,21 +34,24 @@ def get_model(cfg, device):
 
 if __name__ == '__main__':
     from utils.misc import get_config
-    cfg = get_config("configs/base.yaml")
+    base_config = "configs/base.yaml"
+    cfg = get_config(base_config)
     model = get_model(cfg, 'cpu')
+
+    print(f"Building model on: {base_config}")
 
     #Test inference
     dummy_batch_size=4
     dummy_data = torch.rand(dummy_batch_size,cfg["model"]["in_channels"],224,224)
 
-    #print("Model:")
-    #print(model)
+    print("Model:")
+    print(model)
 
     print(f"Input: {dummy_data.shape}")
     outputs = model(dummy_data)
-    print(f"Output:\n", outputs.detach().shape)
+    print(f"\n Output:\n", outputs.detach().shape, outputs.detach())
     if cfg["model"]["intermediate_outputs"] is not None:
-        print(f"Intermediates:\n")
+        print(f"\n Intermediates:")
         print(model.intermediate_outputs.keys())
         for name in model.intermediate_outputs.keys():
             print(f"{name}: {model.intermediate_outputs[name].shape}")
