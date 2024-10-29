@@ -49,7 +49,7 @@ def conf_matrix_plot(preds, labels, idx=None):
         plt.close()
         return wandb.Image(im)
     else:
-        conf_matrices, xedges, yedges = np.histogram2d(x=preds[:,idx],y=labels[:,idx],bins=np.linspace(0,max_vals,max_vals).astype(np.uint8))
+        conf_matrices, xedges, yedges = np.histogram2d(x=preds[:,idx],y=labels[:,idx],bins=(np.linspace(0,max_vals, max_vals+1).astype(np.uint8), np.linspace(0,max_vals, max_vals+1).astype(np.uint8)))
         #Normalize with respect to total of a specific class
         for i in range(conf_matrices.shape[0]):
             for j in range(conf_matrices.shape[1]):
