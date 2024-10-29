@@ -189,6 +189,8 @@ if __name__ == "__main__":
             
             #Forward
             outputs = model(inputs.to(args.device))
+
+            #XAI
             
             #Calculate loss
             loss = loss_fn(outputs, labels)
@@ -214,12 +216,15 @@ if __name__ == "__main__":
                 running_loss = 0
 
             #Log validation stats
-            if itteration % cfg["evaluation"]["eval_freq"] == 0 or i >= len(train_dataloader):
+            if itteration % cfg["evaluation"]["eval_freq"] == 0:
                 log, validation_loss = validate(model, valid_dataloader, valid_logger)
                 if validation_loss < best_model:
                     best_model = validation_loss
-                    torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-itt-{itteration}-loss{validation_loss}.pt')
+                    torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-itt-{itteration}-loss{validation_loss:.2f}.pt')
                 model.train()
-
-       #Save Model
-        torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-epoch-{epoch}.pt')
+            elif i >= len(train_dataloader):
+                log, validation_loss = validate(model, valid_dataloader, valid_logger)
+                if validation_loss < best_model:
+                    best_model = validation_loss
+                    torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-epoch-{epoch}-loss{validation_loss:.2f}.pt')
+                model.train()
