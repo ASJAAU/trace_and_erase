@@ -93,10 +93,17 @@ def wandb_logger(cfg, output_path="./wandb"):
 ### HELPER FUNCTIONS FOR LOGGING
 def get_metric(metric, classwise=[]):
     metrics = {}
+    #MAE
     if metric == "mae":
         metrics["MAE"] = mae
         for i,c in enumerate(classwise):
             metrics[f"MAE_{c}"] = partial(mae, idx=i)
+    #MSE
+    elif metric == "mse":
+        metrics["MSE"] = mse
+        for i,c in enumerate(classwise):
+            metrics[f"MSE_{c}"] = partial(mse, idx=i)
+
     #RMSE
     elif metric == "rmse":
         metrics["RMSE"] = rmse
@@ -108,7 +115,7 @@ def get_metric(metric, classwise=[]):
         for i,c in enumerate(classwise):
             metrics[f"MAPE_{c}"] = partial(mape, idx=i)
     #MASE    
-    elif metric == "maSe":
+    elif metric == "mase":
         metrics["MASE"] = mase
         for i,c in enumerate(classwise):
             metrics[f"MASE_{c}"] = partial(mase, idx=i)
@@ -147,6 +154,13 @@ def rmse(preds, labels, idx=None):
         return np.sqrt(np.mean(abs(preds-labels)**2))
     else: #Calculating class specific RMSE
         return np.sqrt(np.mean(abs(preds[:,idx]-labels[:,idx])**2))
+
+def mse(preds, labels, idx=None):
+    if idx is None: #Calculating total RMSE
+        return np.mean(abs(preds-labels**2))
+    else: #Calculating class specific RMSE
+        return np.mean(abs(preds[:,idx]-labels[:,idx]**2))
+
 
 def r2(preds, labels, idx=None):
     return None
