@@ -1,6 +1,6 @@
 from torchvision.transforms import v2 as torch_transforms
 from torch.utils.data import Dataset
-from torchvision.io import read_image
+from torchvision.io import read_image, ImageReadMode
 import torch
 import pandas as pd
 import os
@@ -15,26 +15,26 @@ def get_transforms(type='train', augments={}):
     #Potential label formatting (for throughput optimization)
     if type == "label":
         return torch_transforms.Compose([
-            torch_transforms.ToTensor()
+            torch_transforms.ToDtype(torch.float32, scale=True),
         ])
+    
     #Input transforms for training
     elif type == "train":
         transforms = [
+            torch_transforms.ToImage(),
             torch_transforms.ToDtype(torch.float32, scale=True),
-            torch_transforms.ToTensor(),
             ]
         for aug in augments.keys():
             transforms.append(transform_dict[aug](**augments[aug][0]))
         return torch_transforms.Compose(transforms)
+    
     #Input transforms for evaluation
     elif type == "test" or type == "valid":
         transforms = [
+            torch_transforms.ToImage(),
             torch_transforms.ToDtype(torch.float32, scale=True),
-            torch_transforms.ToTensor(),
             ]
         return torch_transforms.Compose(transforms)
-
-
 class HarborfrontDataset(Dataset):
     CLASS_LIST = {
         0: "human",
@@ -44,7 +44,8 @@ class HarborfrontDataset(Dataset):
     }
     def __init__(self, data_split, root, 
                  transform=None, 
-                 target_transform=None, 
+                 target_transform=None,
+                 in_channels = 3, 
                  classes=CLASS_LIST.values(), 
                  binary_labels=False,
                  classwise=True, 
@@ -57,6 +58,18 @@ class HarborfrontDataset(Dataset):
         #Transform objects
         self.transform = transform
         self.target_transform = target_transform
+
+        #Set read format
+        if in_channels == 1:
+            self.read_mode = ImageReadMode.GRAY
+        elif in_channels == 2:
+            self.read_mode = ImageReadMode.GRAY_ALPHA
+        elif in_channels == 3:
+            self.read_mode = ImageReadMode.RGB
+        elif in_channels == 4:
+            self.read_mode = ImageReadMode.RGB_ALPHA
+        else:
+            raise Exception(f"Unsupported input_channel_depth '{in_channels}' ")
 
         #Use target device for storage
         self.device = device
@@ -103,7 +116,7 @@ class HarborfrontDataset(Dataset):
         return len(self.dataset.index)
 
     def __getitem__(self, idx):
-        image = read_image(self.images.iloc[idx])
+        image = read_image(self.images.iloc[idx], self.read_mode)
         label = torch.Tensor(self.dataset["labels"].iloc[idx])
 
         if self.transform:
