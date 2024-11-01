@@ -21,7 +21,6 @@ def get_transforms(type='train', augments={}):
     #Input transforms for training
     elif type == "train":
         transforms = [
-            torch_transforms.ToImage(),
             torch_transforms.ToDtype(torch.float32, scale=True),
             ]
         for aug in augments.keys():
@@ -31,7 +30,6 @@ def get_transforms(type='train', augments={}):
     #Input transforms for evaluation
     elif type == "test" or type == "valid":
         transforms = [
-            torch_transforms.ToImage(),
             torch_transforms.ToDtype(torch.float32, scale=True),
             ]
         return torch_transforms.Compose(transforms)
@@ -118,6 +116,8 @@ class HarborfrontDataset(Dataset):
     def __getitem__(self, idx):
         image = read_image(self.images.iloc[idx], self.read_mode)
         label = torch.Tensor(self.dataset["labels"].iloc[idx])
+        print(image)
+        print(label)
 
         if self.transform:
             image = self.transform(image)
@@ -152,7 +152,7 @@ if __name__ == '__main__':
         target_transform=transforms, 
         classes=cfg["data"]["classes"], 
         binary_labels=cfg["data"]["binary_cls"],
-        classwise=cfg["data"]["classwise"], 
+        classwise=cfg["evaluation"]["classwise_metrics"], 
         device="cpu", 
         verbose=True)
 
@@ -160,10 +160,13 @@ if __name__ == '__main__':
     dataloader = DataLoader(
         dataset,
         batch_size=cfg["training"]["batch_size"],
+        shuffle=True,
     )
 
     #Print dummy sample
     dummy_sample = next(iter(dataloader))
-    print(f"Input Tensor = {dummy_sample[0].shape}")
-    print(f"Label Tensor = {dummy_sample[1].shape}")
+    print(f"Input Tensor shape = {dummy_sample[0].shape}")
+    print(f"Label Tensor shape = {dummy_sample[1].shape}")
+    print(f"Input Tensor content:\n {dummy_sample[0]}")
+    print(f"Label Tensor content:\n {dummy_sample[1]}")
 
