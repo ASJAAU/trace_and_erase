@@ -9,7 +9,7 @@ from utils.metrics import Logger
 from utils.misc import existsfolder, get_config
 from utils.data import HarborfrontDataset, get_transforms
 from torch.utils.data import DataLoader
-from model import get_model
+from utils.model import get_model
 
 # Because we do evaluation based on several conditions evaluation has been made into a function
 def validate(model, valid_dataloader, valid_logger, extra_plots={}, xargs={}, prepend='valid'):
