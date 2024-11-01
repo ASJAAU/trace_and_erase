@@ -4,7 +4,10 @@ import matplotlib.pyplot as plt
 
 def conf_matrix(preds, labels, idx=None):
     #Set Maximum value
-    max_vals = int(labels.max()) + 1
+    if not idx:
+        max_vals = int(labels.max()) + 1
+    else:
+        max_vals = int(labels[:,idx].max()) + 1
     #Define function to truncate predictions
     set_bounderies = np.vectorize(lambda t: max_vals if t > max_vals else int(max(t,0)))
     #how many matrices we making?
@@ -23,7 +26,10 @@ def conf_matrix(preds, labels, idx=None):
 
 def conf_matrix_plot(preds, labels, idx=None):
     #Set Maximum value
-    max_vals = int(labels.max()) + 1
+    if not idx:
+        max_vals = int(labels.max()) + 1
+    else:
+        max_vals = int(labels[:,idx].max()) + 1
     #Define function to truncate predictions
     set_bounderies = np.vectorize(lambda t: max_vals if t > max_vals else max(t,0))
     #how many matrices we making?
