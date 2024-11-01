@@ -33,7 +33,7 @@ def get_model(cfg, device):
     return model
 
 if __name__ == '__main__':
-    from utils.misc import get_config
+    from misc import get_config
     base_config = "configs/base.yaml"
     cfg = get_config(base_config)
     model = get_model(cfg, 'cpu')
