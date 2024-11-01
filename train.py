@@ -80,13 +80,14 @@ if __name__ == "__main__":
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=cfg["training"]["batch_size"],
+        shuffle=True,
     )
 
     if args.verbose:
         print("Train data sanity check")
         dummy_sample = next(iter(train_dataloader))
         print(f"Train: Input Tensor = {dummy_sample[0].shape}")
-        print(f"Train: Label Tensor = {dummy_sample[1].shape}\n{dummy_sample[1]}")
+        print(f"Train: Label Tensor = {dummy_sample[1].shape}\n values: \n{dummy_sample[1]}")
 
     print("\n### CREATING VALIDATION DATASET")
     valid_dataset = HarborfrontDataset(
@@ -110,11 +111,12 @@ if __name__ == "__main__":
         print("Validation data sanity check")
         dummy_sample = next(iter(valid_dataloader))
         print(f"Valid: Input Tensor = {dummy_sample[0].shape}")
-        print(f"Valid: Label Tensor = {dummy_sample[1].shape}\n{dummy_sample[1]}")
+        print(f"Valid: Label Tensor = {dummy_sample[1].shape}\n values: \n{dummy_sample[1]}")
 
     print("\n########## BUILDING MODEL ##########")
     print(f"MODEL ARCH: {cfg['model']['arch']}")
     model = get_model(cfg, args.device)
+
 
     #Define optimizer
     optimizer = torch.optim.SGD(
@@ -123,7 +125,21 @@ if __name__ == "__main__":
         momentum=cfg["training"]["momentum"],
         weight_decay=5e-4
         )
-
+    
+    #Define learning-rate schedule
+    if cfg["training"]["lr_decay_step"] == "epoch":
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer=optimizer,
+            step_size=len(train_dataloader), 
+            gamma=cfg["training"]["lr_decay"],
+        )
+    else:
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer=optimizer,
+            step_size=cfg["training"]["lr_decay_step"], 
+            gamma=cfg["training"]["lr_decay"],
+        )
+    
     #Define loss
     print(f"LOSS: {cfg['training']['loss']}")
     if cfg["training"]["loss"] == "huber":
@@ -134,7 +150,6 @@ if __name__ == "__main__":
         loss_fn = torch.nn.MSELoss()
     else:
         raise Exception(f"UNKNOWN LOSS: '{cfg['training']['loss']}' must be one of the following: 'l1', 'mse', 'huber' ")
-
 
     print("\n########## LOCAL OUTPUTS ##########")
     #Create output folder
@@ -158,7 +173,7 @@ if __name__ == "__main__":
 
     #Plotting for Validation
     extra_plots = {}
-    if cfg["wandb"]["enabled"] and cfg["wandb"]["plotting"]:
+    if cfg["wandb"]["enabled"] and cfg["wandb"]["plotting"]: 
         from utils.wandb_plots import conf_matrix_plot
         from functools import partial
         extra_plots[f"conf_plot"] = conf_matrix_plot
@@ -190,8 +205,10 @@ if __name__ == "__main__":
             #Forward
             outputs = model(inputs.to(args.device))
 
+            #Ignore class in loss function
+
             #XAI
-            
+
             #Calculate loss
             loss = loss_fn(outputs, labels)
             loss.backward()

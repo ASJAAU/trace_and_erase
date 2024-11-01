@@ -4,9 +4,11 @@ training:
   epochs: 10
   batch_size: 8
   log_freq: 500 #Number of batches
-  loss: "mse"
-  lr: 0.01
+  loss: "mse" #['huber', 'l1', 'mse']
   momentum: 0.9
+  lr: 0.1
+  lr_decay: 0.1
+  lr_decay_step: 10000 #Decay the learning rate at every N batches (put "epoch" to use epochs as steps)
 
 augmentation:
   RandomHorizontalFlip:
@@ -26,7 +28,7 @@ evaluation:
 
 model:
   arch: "resnet50d"
-  in_channels: 3
+  in_channels: 1
   weights: null
   finale_activation: null
   intermediate_outputs: #print(model) to find layer names
@@ -41,6 +43,7 @@ data:
   - "bicycle"
   - "motorcycle"
   - "vehicle"
+  mask: Null #Mask losses for the clases below (set 'mask: Null' to disable ignoring)
   binary_cls: False
   root: "/Data/Harborfront_raw/"
   train: "data/Train_data.csv"
