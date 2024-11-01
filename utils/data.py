@@ -8,10 +8,11 @@ import numpy as np
 
 #Data Preprocessing
 def get_transforms(type='train', augments={}):
-
+    #Shorthands for torch functions (for flexible config changes)
     transform_dict={
         "RandomHorizontalFlip": torch_transforms.RandomHorizontalFlip
     }
+
     #Potential label formatting (for throughput optimization)
     if type == "label":
         return torch_transforms.Compose([
@@ -116,8 +117,6 @@ class HarborfrontDataset(Dataset):
     def __getitem__(self, idx):
         image = read_image(self.images.iloc[idx], self.read_mode)
         label = torch.Tensor(self.dataset["labels"].iloc[idx])
-        print(image)
-        print(label)
 
         if self.transform:
             image = self.transform(image)

@@ -131,6 +131,11 @@ def get_wandb_plots(names):
     return plots
 
 #Metrics functions
+# ALL metrics functions expect the same two inputs
+# preds = 2D numpy array of Batch * predictions
+# labels = 2D numpy array of Batch * Labels
+# idx = an index for index specific metric calculation
+
 def mae(preds, labels, idx=None):
     if idx is None: #Calculating total MAE
         return np.mean(abs(preds-labels))
@@ -160,7 +165,6 @@ def mse(preds, labels, idx=None):
         return np.mean(abs(preds-labels**2))
     else: #Calculating class specific RMSE
         return np.mean(abs(preds[:,idx]-labels[:,idx]**2))
-
 
 def r2(preds, labels, idx=None):
     return None
