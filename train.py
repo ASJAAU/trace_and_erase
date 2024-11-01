@@ -11,8 +11,8 @@ from utils.data import HarborfrontDataset, get_transforms
 from torch.utils.data import DataLoader
 from model import get_model
 
-
-def validate(model, valid_dataloader, valid_logger, extra_plots={}, xargs={}):
+# Because we do evaluation based on several conditions evaluation has been made into a function
+def validate(model, valid_dataloader, valid_logger, extra_plots={}, xargs={}, prepend='valid'):
     model.eval()
     with torch.no_grad():
         valid_loss = 0
@@ -35,13 +35,15 @@ def validate(model, valid_dataloader, valid_logger, extra_plots={}, xargs={}):
 
         #Parse additional external info
         extra_info = {
-            "loss": validation_loss,
+            f"{prepend}_loss": validation_loss,
         }
+        for key,value in xargs.items():
+            extra_info[key] = value
 
         #Log 
         val_logs = valid_logger.log(
             clear_buffer=True,
-            prepend='valid',
+            prepend=prepend,
             extras=extra_plots,
             xargs=extra_info,
         )
@@ -189,7 +191,7 @@ if __name__ == "__main__":
     print(f"Logging progress every: {cfg['training']['log_freq']} batches ({cfg['training']['log_freq']*cfg['training']['batch_size']} samples)")
     print(f"Progress will be logged {len(train_dataloader) / cfg['training']['log_freq']} times per epoch")
     print(f"Running evaluation every: {cfg['evaluation']['eval_freq']} batches ({cfg['evaluation']['eval_freq']*cfg['training']['batch_size']} samples)")
-    print(f"In addition to end of epoch evaluation, evaluation will be performed {len(train_dataloader) / cfg['evaluation']['eval_freq']}times per epoch (overflowing into subsequent epoch if not perfectly divisible)")
+    print(f"In addition to end of epoch evaluation, evaluation will be performed {len(train_dataloader) / cfg['evaluation']['eval_freq']} times per epoch")
     
     best_model=10000 #We want the loss to be lower than this before we save anything
     itteration = 0
@@ -228,7 +230,7 @@ if __name__ == "__main__":
             train_logger.add_prediction(outputs.detach().to("cpu").numpy(), labels.detach().to("cpu").numpy())
 
             #Log training stats
-            if it % cfg["training"]["log_freq"] == 0 and it != 0:
+            if itteration % cfg["training"]["log_freq"] == 0 and it != 0:
                 logs = train_logger.log(
                     clear_buffer=True,
                     prepend='train',
@@ -236,7 +238,7 @@ if __name__ == "__main__":
                         "loss": running_loss/cfg["training"]["log_freq"],
                         "running_loss": running_loss,
                         "lr": lr_scheduler.get_last_lr(),
-                        "internal_itteration": itteration,
+                        "itteration": itteration,
                     },
                 )
                 running_loss = 0
@@ -244,18 +246,18 @@ if __name__ == "__main__":
             #Run and log validation stats
             if it % cfg["evaluation"]["eval_freq"] == 0 and it != 0:
                 extra_logging = {
-                    "internal_itteration": itteration,
+                    "itteration": itteration,
                 }
-                log, validation_loss = validate(model, valid_dataloader, valid_logger, extra_plots=extra_plots ,xargs=extra_logging)
+                log, validation_loss = validate(model, valid_dataloader, valid_logger, extra_plots=extra_plots, xargs=extra_logging)
                 if validation_loss < best_model:
                     best_model = validation_loss
                     torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-itt-{itteration}-loss{validation_loss:.2f}.pt')
                 model.train()
             elif it+1 >= len(train_dataloader):
                 extra_logging = {
-                    "internal_itteration": itteration,
+                    "itteration": itteration,
                 }
-                log, validation_loss = validate(model, valid_dataloader, valid_logger, extra_plots=extra_plots ,xargs=extra_logging)
+                log, validation_loss = validate(model, valid_dataloader, valid_logger, extra_plots=extra_plots, xargs=extra_logging)
                 if validation_loss < best_model:
                     best_model = validation_loss
                     torch.save(model.state_dict(), out_folder + "/weights/" + f'checkpoint-epoch-{epoch}-loss{validation_loss:.2f}.pt')
