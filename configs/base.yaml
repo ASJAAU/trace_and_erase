@@ -27,15 +27,11 @@ evaluation:
   eval_freq: 5000
 
 model:
-  arch: "resnet50d"
+  arch: "cspdarknet53"
   in_channels: 1
   weights: null
   finale_activation: null
-  intermediate_outputs: #print(model) to find layer names
-    - "model.layer1[2].act3"
-    - "model.layer2[2].act3" 
-    - "model.layer3[2].act2"
-    - "model.layer4[2].act3"
+  intermediate_outputs: null
 
 data:
   classes:
