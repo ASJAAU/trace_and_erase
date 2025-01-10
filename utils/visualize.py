@@ -1,4 +1,6 @@
+import matplotlib
 from matplotlib.pyplot import subplots, show, figure
+from matplotlib import patches, colors, rc
 import numpy as np
 
 def visualize_heatmap(image, heatmap, cmap='jet'):
@@ -12,55 +14,74 @@ def visualize_heatmap(image, heatmap, cmap='jet'):
     ax.axis('off')
     return fig
 
-def visualize_prediction(image, predictions=None, groundtruth=None, heatmaps=None, classes=None, cmap='jet'):
+def visualize_prediction(image, predictions=None, groundtruth=None, heatmaps=None, centers=None, bbox=None, classes=None, cmap='jet'):
+    #Get color map (for annotations)
+    colormap = [
+        (0.0, 1.0, 0.0, 1.0),
+        (0.0, 0.0, 1.0, 1.0),
+        (1.0, 0.0, 0.0, 1.0),
+        (1.0, 1.0, 0.0, 1.0),
+        (0.0, 1.0, 1.0, 1.0),
+        (1.0, 0.0, 1.0, 1.0),
+    ]
+    
     #Heatmaps?
     len_heatmaps = len(heatmaps) if heatmaps is not None else 0
     
     #Make figure
-    fig, axs = subplots(1+len_heatmaps, 1, figsize=(6,6 * (len_heatmaps+1)))
+    fig, axs = subplots(1+len_heatmaps, 1, figsize=(8,6 * (len_heatmaps+1)))
 
-    #Remove graph ticks
-    if len_heatmaps < 1:
-        #Remove image ticks
-        axs.axis('off')
-
-        #Original image
-        axs.imshow(image, cmap='gray', vmin=0, vmax=255)
-        axs.set_title("Input Image")
-
-        if predictions is not None:
-            #Check if class names exist
-            if classes is None:
-                classes = [f'{i}' for i in range(len(predictions))]
-            else:
-                assert len(predictions) <= len(classes), "The length of 'classes' argument needs to be equal or larger than length of predictions"
-
-            #Write prediction
-            text = [f"{classes[i]} - pred:{round(float(predictions[i]),2)} gt: {groundtruth[i] if groundtruth is not None else ''}\n" for i in range(len(predictions))]
-            props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-            axs.text(0.05, 0.95, "".join(text), transform=axs.transAxes, fontsize=12, verticalalignment='top', bbox=props)
+    #Format initial image
+    if len_heatmaps<1:
+        in_im_fig = axs
     else:
-        #Remove image ticks
-        axs[0].axis('off')
+        in_im_fig = axs[0]
 
-        #Original image
-        axs[0].imshow(image, cmap='gray', vmin=0, vmax=255)
-        axs[0].set_title("Input Image")
 
-        #Define classes
+    #Remove image ticks
+    in_im_fig.axis('off')
+
+    #Original image
+    in_im_fig.imshow(image, cmap='gray', vmin=0, vmax=255)
+    #in_im_fig.set_title("Input Image")
+
+    #Check if there is predictions
+    if predictions is not None:
+        #Check if class names exist
         if classes is None:
             classes = [f'{i}' for i in range(len(predictions))]
         else:
-            assert len(len_heatmaps) <= len(classes), "The length of 'heatmaps' argument needs to be equal or larger than length of predictions"
+            assert len(predictions) <= len(classes), "The length of 'classes' argument needs to be equal or larger than length of predictions"
 
-        #Write prediction
-        text = [f"{classes[i]} - pred:{round(float(predictions[i]),2)} gt: {groundtruth[i] if groundtruth is not None else ''}\n" for i in range(len(predictions))]
-        props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-        axs[0].text(0.05, 0.95, "".join(text), transform=axs[0].transAxes, fontsize=12, verticalalignment='top', bbox=props)
+        #Write prediction - cmultilabel classification/regression
+        text = [f"{classes[i]}: {f'{float(predictions[i])}'} {f'({int(groundtruth[i])})' if groundtruth is not None else ''}" for i in range(len(predictions))]
+        
+        #Put the text in a box
+        in_im_fig.text(0.01, 0.99, "\n".join(text), transform=in_im_fig.transAxes, fontsize=12, verticalalignment='top', horizontalalignment='left', 
+                bbox={
+                    'boxstyle':'round', 
+                    'facecolor':'wheat', 
+                    'alpha':0.8
+                    }
+                )
 
+    #Check for groundtruth bounding boxes
+    if bbox is not None:
+        for i in range(len(bbox)):
+            c, x1, y1, x2,y2 = bbox[i]
+            w = x2 - x1
+            h = y2 - y1
+            in_im_fig.add_patch(patches.Rectangle((x1,y1),w,h,linewidth=1, edgecolor=colormap[c], facecolor=colormap[c][:3]+(0.15,)))#'none'))
+    
+    #Check for groundtruth center points
+    if centers is not None:
+        for i in range(len(centers)):
+            c, x1, y1 = centers[i]
+            in_im_fig.add_patch(patches.Circle((x1,y1) ,radius=2, linewidth=1, facecolor=colormap[c]))
 
-        #Draw heatmaps
-        for i in range(len_heatmaps):
+    #Draw heatmaps
+    if heatmaps is not None:
+        for i in range(len(heatmaps)):
             #Remove graph ticks
             axs[i+1].axis('off')
             #Set image

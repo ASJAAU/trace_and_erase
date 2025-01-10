@@ -1,10 +1,12 @@
 from torchvision.transforms import v2 as torch_transforms
+from torchvision.transforms import ToPILImage
 from torch.utils.data import Dataset
 from torchvision.io import read_image, ImageReadMode
 import torch
 import pandas as pd
 import os
 import numpy as np
+import json
 
 #Data Preprocessing
 def get_transforms(type='train', augments={}):
@@ -48,7 +50,8 @@ class HarborfrontDataset(Dataset):
                  classes=CLASS_LIST.values(), 
                  binary_labels=False,
                  classwise=True, 
-                 device='cpu', 
+                 device='cpu',
+                 keep_location=False, 
                  verbose=False) -> None:
         if verbose:
             print(f'Loading "{data_split}"')
@@ -86,16 +89,23 @@ class HarborfrontDataset(Dataset):
                 assert c in self.CLASS_LIST.values(), f"{c} is not a known class. \n Known classes:{','.join(self.CLASS_LIST.values())}" 
             self.classes = list(classes)
 
+        #Keep object localizations (Centers and bounding boxes)
+        self.object_localization = keep_location
+
         #Create dataset of relevant info
         dataset = {"file_name": list(data['file_name'])}
         for cls in self.classes:
             dataset[f'{cls}'] = data[f'{cls}']
 
+            if keep_location:
+                dataset[f'{cls}_centers'] = data[f'{cls}_centers']
+                dataset[f'{cls}_bbox'] = data[f'{cls}_bbox']
+
         #Reconstruct Dataframe with only training data
         self.dataset = pd.DataFrame(dataset)
 
         #Join paths with root
-        self.images = self.dataset.apply(lambda x: os.path.join(root, x["file_name"]), axis=1)
+        self.dataset["file_name"] = self.dataset.apply(lambda x: os.path.join(root, x["file_name"]), axis=1)
         
 
         #Grab labels
@@ -115,7 +125,7 @@ class HarborfrontDataset(Dataset):
         return len(self.dataset.index)
 
     def __getitem__(self, idx):
-        image = read_image(self.images.iloc[idx], self.read_mode)
+        image = read_image(self.dataset["file_name"].iloc[idx], self.read_mode)
         label = torch.Tensor(self.dataset["labels"].iloc[idx])
 
         if self.transform:
@@ -125,6 +135,29 @@ class HarborfrontDataset(Dataset):
             label = self.target_transform(label)
 
         return image.to(self.device), label.to(self.device)
+    
+    def grab_sample(self, idx):
+        image = read_image(self.dataset["file_name"].iloc[idx], self.read_mode)
+        label = torch.Tensor(self.dataset["labels"].iloc[idx])
+
+        if self.transform:
+            image = self.transform(image)
+
+        if self.target_transform:
+            label = self.target_transform(label)
+
+        sample = {
+            "image": image,
+            "label": label,
+        }
+
+        if self.object_localization:
+            sample["centers"]=[]
+            sample["bbox"]=[]
+            for i,c in enumerate(self.classes):
+                sample["centers"].extend([[i]+x for x in json.loads(self.dataset[f"{c}_centers"].iloc[idx])]) 
+                sample["bbox"].extend([[i]+x for x in json.loads(self.dataset[f"{c}_bbox"].iloc[idx])]) 
+        return sample
     
     def __repr__(self):
         return self.dataset.__str__()
@@ -136,6 +169,8 @@ class HarborfrontDataset(Dataset):
 if __name__ == '__main__':
     from misc import get_config
     from torch.utils.data import DataLoader
+    from visualize import visualize_prediction
+    import random
     cfg = get_config("configs/base.yaml")
     subset = "test"
 
@@ -148,11 +183,12 @@ if __name__ == '__main__':
         data_split=cfg["data"][subset], 
         root=cfg["data"]["root"], 
         transform=transforms, 
-        target_transform=transforms, 
+        target_transform=label_transforms, 
         classes=cfg["data"]["classes"], 
         binary_labels=cfg["data"]["binary_cls"],
         classwise=cfg["evaluation"]["classwise_metrics"], 
-        device="cpu", 
+        device="cpu",
+        keep_location=True, 
         verbose=True)
 
     #Load dataloader
@@ -166,6 +202,22 @@ if __name__ == '__main__':
     dummy_sample = next(iter(dataloader))
     print(f"Input Tensor shape = {dummy_sample[0].shape}")
     print(f"Label Tensor shape = {dummy_sample[1].shape}")
-    print(f"Input Tensor content:\n {dummy_sample[0]}")
-    print(f"Label Tensor content:\n {dummy_sample[1]}")
+    #print(f"Input Tensor content:\n {dummy_sample[0]}")
+    #print(f"Label Tensor content:\n {dummy_sample[1]}")
 
+    #Grab random sample and visualize - Debugging
+    sample = dataset.grab_sample(60095)
+    for k,v in sample.items():
+        print(f'{k.rjust(10)}: {v}')
+
+    to_image = ToPILImage()
+    #Visualize
+    fig = visualize_prediction(to_image(sample["image"].cpu()),
+            predictions=sample["label"].cpu(), 
+            groundtruth=sample["label"].cpu(),
+            heatmaps=None,
+            centers=sample["centers"], 
+            #bbox=sample["bbox"], 
+            classes=dataset.classes,
+        )
+    fig.savefig("./test_out.jpg")

@@ -52,7 +52,7 @@ def load_annotations(sample_name, img_path, ann_path):
                     #Add bounding box
                     boxes.append([int(row[2]), int(row[3]), int(row[4]), int(row[5])]) #Xtopleft, Ytopleft, Xbottomright, Ybottomright
                     #Add boundingbox Centers
-                    centers.append([int(int(row[2])+int(row[4])/2), int(int(row[3])+int(row[5])/2)])
+                    centers.append([(int(row[2])+(int(row[4])-int(row[2]))/2), (int(row[3]) + (int(row[5])-int(row[3]))/2)])
                     #Add areas
                     areas.append(abs(int(row[4])-int(row[2])) * abs(int(row[5])-int(row[3])))
     else:
